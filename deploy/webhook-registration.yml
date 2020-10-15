@@ -1,0 +1,26 @@
+apiVersion: admissionregistration.k8s.io/v1beta1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: drone-pod-admission
+  labels:
+    app: drone-pod-admission
+    kind: mutator
+webhooks:
+  - name: drone-pod-admission.hhamalai.net
+    objectSelector:
+      matchLabels:
+        # Match by label used in Drone CI jobs
+        io.drone: "true"
+    clientConfig:
+      service:
+        name: drone-pod-admission
+        namespace: drone
+        path: "/"
+        port: 443
+      caBundle: ${CA_BUNDLE}
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: ["*"]
+        apiVersions: ["v1"]
+        resources: ["pods"]
+        scope: "Namespaced"

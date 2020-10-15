@@ -1,0 +1,96 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: drone-pod-admission
+  namespace: drone
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: drone-pod-admissions
+  namespace: drone
+rules:
+  - apiGroups:
+      - ''
+    resources:
+      - secrets
+    verbs:
+      - get
+      - list
+  - apiGroups:
+      - admissionregistration.k8s.io
+    resources:
+      - validatingwebhookconfigurations
+    verbs:
+      - get
+      - update
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: drone-pod-admissions
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: drone-pod-admissions
+subjects:
+  - kind: ServiceAccount
+    name: drone-pod-admissions
+    namespace: drone
+---
+apiVersion: mumoshu.github.io/v1alpha1
+kind: AWSSecret
+metadata:
+  name: drone-pod-admission-certs
+  namespace: drone
+spec:
+  stringDataFrom:
+    secretsManagerSecretRef:
+      secretId: drone-pod-admission-certs
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: drone-pod-admission
+  namespace: drone
+  labels:
+    app: drone-pod-admission
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: drone-pod-admission
+  template:
+    metadata:
+      labels:
+        app: drone-pod-admission
+    spec:
+      containers:
+        - name: drone-pod-admission
+          image: ${IMAGE}
+          imagePullPolicy: Always
+          args:
+            - -tls-cert-file=/etc/webhook/certs/cert.pem
+            - -tls-key-file=/etc/webhook/certs/key.pem
+          volumeMounts:
+            - name: webhook-certs
+              mountPath: /etc/webhook/certs
+              readOnly: true
+      volumes:
+        - name: webhook-certs
+          secret:
+            secretName: drone-pod-admission-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: drone-pod-admission
+  namespace: drone
+  labels:
+    app: drone-pod-admission
+spec:
+  ports:
+    - port: 443
+      targetPort: 8080
+  selector:
+    app: drone-pod-admission
